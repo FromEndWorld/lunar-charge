@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -7,18 +6,18 @@ import itertools
 # 设置页面
 st.set_page_config(page_title="原神月感电伤害计算器", layout="wide")
 st.title("🎮 原神月感电反应伤害精确计算器")
-st.caption("基于16种暴击组合精确计算期望伤害 | 最高伤害×1，次高×0.5，第三第四×0.083 | 作者：GPT-4")
+st.caption("支持1-4名角色 | 最高伤害×1，次高×0.5，第三第四×0.083 | 作者：GPT-4")
 
 # 角色数据输入表单
 st.header("角色参数设置")
 cols = st.columns(4)
 characters = []
-weights = [1.0, 0.5, 1/12, 1/12]  # 伤害权重
 
+# 动态角色输入
 for i in range(4):
     with cols[i]:
         st.subheader(f"角色 {i+1}")
-        name = st.text_input(f"角色名", key=f"name_{i}", placeholder="例如：雷电将军")
+        name = st.text_input(f"角色名", key=f"name_{i}", placeholder="留空则忽略")
         level = st.number_input(f"等级", min_value=1, max_value=90, value=90, key=f"level_{i}")
         em = st.number_input(f"元素精通", min_value=0, max_value=1500, value=300, key=f"em_{i}")
         crit_rate = st.slider(f"暴击率%", min_value=0.0, max_value=100.0, value=60.0, key=f"cr_{i}") / 100
@@ -46,6 +45,19 @@ if st.button("精确计算伤害期望", type="primary"):
     if not characters:
         st.warning("请至少输入一个角色数据！")
     else:
+        n = len(characters)  # 实际角色数量
+        st.success(f"已输入 {n} 名角色参数，开始计算...")
+        
+        # 根据角色数量设置权重
+        if n == 1:
+            weights = [1.0]
+        elif n == 2:
+            weights = [1.0, 0.5]
+        elif n == 3:
+            weights = [1.0, 0.5, 1/12]
+        else:  # n == 4
+            weights = [1.0, 0.5, 1/12, 1/12]
+        
         # 计算每个角色的基础伤害
         char_data = []
         for char in characters:
@@ -59,8 +71,7 @@ if st.button("精确计算伤害期望", type="primary"):
                 "non_crit_rate": 1 - char["crit_rate"]
             })
         
-        # 生成所有暴击组合 (2^4=16种)
-        n = len(char_data)
+        # 生成所有暴击组合 (2^n种)
         crit_combinations = list(itertools.product([0, 1], repeat=n))
         
         # 计算每种组合的概率和加权伤害
@@ -125,13 +136,17 @@ if st.button("精确计算伤害期望", type="primary"):
         with col1:
             st.metric("总伤害期望", f"{int(total_expectation):,}")
             st.metric("计算组合数", len(scenario_results))
+            st.metric("参与角色数", n)
             
             # 显示权重说明
             st.info("**伤害权重规则**:")
-            st.write("- 🥇 最高伤害角色 ×1.0")
-            st.write("- 🥈 次高伤害角色 ×0.5")
-            st.write("- 🥉 第三角色 ×0.083")
-            st.write("- 第四角色 ×0.083")
+            st.write(f"- 🥇 最高伤害角色 ×{weights[0]}")
+            if n >= 2:
+                st.write(f"- 🥈 次高伤害角色 ×{weights[1]}")
+            if n >= 3:
+                st.write(f"- 🥉 第三角色 ×{weights[2]}")
+            if n >= 4:
+                st.write(f"- 第四角色 ×{weights[3]}")
             
             # 显示角色基础伤害
             st.subheader("角色基础伤害")
@@ -156,25 +171,26 @@ if st.button("精确计算伤害期望", type="primary"):
             st.dataframe(prob_df.sort_values("概率", ascending=False), hide_index=True)
             
             # 显示最高概率组合详情
-            max_prob_scenario = max(scenario_results, key=lambda x: x["概率"])
-            with st.expander(f"最高概率组合: {max_prob_scenario['组合']} (概率: {max_prob_scenario['概率']*100:.2f}%)"):
-                det_df = pd.DataFrame(max_prob_scenario["详情"])
-                det_df["伤害"] = det_df["damage"].astype(int)
-                det_df["权重"] = det_df["weight"]
-                det_df["加权伤害"] = det_df["weighted"].astype(int)
-                st.dataframe(det_df[["name", "伤害", "crit", "权重", "加权伤害"]].rename(
-                    columns={"name": "角色", "crit": "暴击情况"}), hide_index=True)
+            if scenario_results:
+                max_prob_scenario = max(scenario_results, key=lambda x: x["概率"])
+                with st.expander(f"最高概率组合: {max_prob_scenario['组合']} (概率: {max_prob_scenario['概率']*100:.2f}%)"):
+                    det_df = pd.DataFrame(max_prob_scenario["详情"])
+                    det_df["伤害"] = det_df["damage"].astype(int)
+                    det_df["权重"] = det_df["weight"]
+                    det_df["加权伤害"] = det_df["weighted"].astype(int)
+                    st.dataframe(det_df[["name", "伤害", "crit", "权重", "加权伤害"]].rename(
+                        columns={"name": "角色", "crit": "暴击情况"}), hide_index=True)
         
         # 详细计算说明
         with st.expander("计算原理说明"):
-            st.markdown("""
+            st.markdown(f"""
             **精确计算流程**:
-            1. 计算所有可能的暴击组合 (16种情况)
+            1. 计算所有可能的暴击组合 ({2**n}种情况)
             2. 对每种组合：
                - 计算发生概率 = Π(各角色暴击状态对应概率)
                - 计算每个角色的实际伤害（暴击状态用暴击伤害，否则用基础伤害）
                - 按伤害值从高到低排序
-               - 应用权重系数：最高伤害×1.0，次高×0.5，第三第四×0.083
+               - 应用权重系数：{', '.join([f'第{i+1}高×{w}' for i, w in enumerate(weights)])}
                - 计算该组合的加权总伤害
                - 期望贡献 = 加权总伤害 × 发生概率
             3. 所有组合的期望贡献之和即为最终期望伤害
@@ -193,18 +209,9 @@ if st.button("精确计算伤害期望", type="primary"):
             ```
             *注：公式参数可根据游戏实际机制调整*
             """)
-            
-            # 显示所有组合的数学表达式
-            st.subheader("所有组合表达式")
-            for i, scenario in enumerate(scenario_results):
-                expr = f"组合 {i+1}: {scenario['组合']} → "
-                expr += f"P = {scenario['概率']:.6f}, "
-                expr += f"伤害 = {int(scenario['加权伤害'])}, "
-                expr += f"贡献 = {scenario['期望贡献']:.2f}"
-                st.code(expr)
 else:
-    st.info("请输入角色参数后点击「精确计算伤害期望」按钮")
+    st.info("请输入1-4名角色参数后点击「精确计算伤害期望」按钮")
 
 # 页脚
 st.divider()
-st.caption("原神月感电伤害计算器 v3.0 | 基于精确组合计算 | 数据仅供参考，实际游戏效果以官方为准")
+st.caption("原神月感电伤害计算器 v4.0 | 支持1-4名角色 | 数据仅供参考，实际游戏效果以官方为准")
