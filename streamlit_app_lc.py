@@ -13,21 +13,20 @@ st.header("角色参数设置")
 cols = st.columns(4)
 characters = []
 
-# 动态角色输入 - 只有启用且命名的角色才参与计算
+# 动态角色输入 - 第一个角色始终启用
 for i in range(4):
     with cols[i]:
-        # 添加角色启用开关
-        enabled = st.checkbox(f"启用角色 {i+1}", value=False, key=f"enable_{i}")
-        
-        if enabled:
-            st.subheader(f"角色 {i+1}")
-            name = st.text_input(f"角色名", key=f"name_{i}", placeholder="必填", value="")
+        # 第一个角色始终启用且不可禁用
+        if i == 0:
+            # 显示固定启用的标识
+            st.subheader(f"角色 1 (主角色)")
+            name = st.text_input(f"角色名", key=f"name_0", placeholder="必填", value="伊涅芙")
             
             if name:  # 只有填写了角色名才显示其他输入
-                level = st.number_input(f"等级", min_value=1, max_value=90, value=90, key=f"level_{i}")
-                em = st.number_input(f"元素精通", min_value=0, max_value=1500, value=300, key=f"em_{i}")
-                crit_rate = st.slider(f"暴击率%", min_value=0.0, max_value=100.0, value=60.0, key=f"cr_{i}") / 100
-                crit_dmg = st.slider(f"暴击伤害%", min_value=0.0, max_value=300.0, value=150.0, key=f"cd_{i}") / 100
+                level = st.number_input(f"等级", min_value=1, max_value=90, value=90, key=f"level_0")
+                em = st.number_input(f"元素精通", min_value=0, max_value=1500, value=300, key=f"em_0")
+                crit_rate = st.slider(f"暴击率%", min_value=0.0, max_value=100.0, value=60.0, key=f"cr_0") / 100
+                crit_dmg = st.slider(f"暴击伤害%", min_value=0.0, max_value=300.0, value=150.0, key=f"cd_0") / 100
                 
                 # 保存角色数据
                 characters.append({
@@ -39,10 +38,36 @@ for i in range(4):
                 })
             else:
                 st.warning("请输入角色名")
+        
+        # 其他角色可启用/禁用
         else:
-            # 禁用状态下的占位符
-            st.subheader(f"角色 {i+1} (未启用)")
-            st.caption("勾选上方开关启用此角色")
+            # 添加角色启用开关
+            enabled = st.checkbox(f"启用角色 {i+1}", value=False, key=f"enable_{i}")
+            
+            if enabled:
+                st.subheader(f"角色 {i+1}")
+                name = st.text_input(f"角色名", key=f"name_{i}", placeholder="必填", value="")
+                
+                if name:  # 只有填写了角色名才显示其他输入
+                    level = st.number_input(f"等级", min_value=1, max_value=90, value=90, key=f"level_{i}")
+                    em = st.number_input(f"元素精通", min_value=0, max_value=1500, value=300, key=f"em_{i}")
+                    crit_rate = st.slider(f"暴击率%", min_value=0.0, max_value=100.0, value=60.0, key=f"cr_{i}") / 100
+                    crit_dmg = st.slider(f"暴击伤害%", min_value=0.0, max_value=300.0, value=150.0, key=f"cd_{i}") / 100
+                    
+                    # 保存角色数据
+                    characters.append({
+                        "name": name,
+                        "level": level,
+                        "em": em,
+                        "crit_rate": crit_rate,
+                        "crit_dmg": crit_dmg
+                    })
+                else:
+                    st.warning("请输入角色名")
+            else:
+                # 禁用状态下的占位符
+                st.subheader(f"角色 {i+1} (未启用)")
+                st.caption("勾选上方开关启用此角色")
 
 # 伤害计算公式
 def calculate_base_damage(level, em):
@@ -54,7 +79,7 @@ def calculate_base_damage(level, em):
 # 计算按钮
 if st.button("精确计算伤害期望", type="primary"):
     if not characters:
-        st.error("请至少启用并填写一名角色的完整信息！")
+        st.error("请确保主角色已填写完整信息！")
     else:
         n = len(characters)  # 实际角色数量
         st.success(f"已输入 {n} 名角色参数，开始计算...")
@@ -221,11 +246,23 @@ if st.button("精确计算伤害期望", type="primary"):
             *注：公式参数可根据游戏实际机制调整*
             """)
 else:
-    if not any([st.session_state.get(f"enable_{i}", False) for i in range(4)]):
-        st.info("请启用至少一名角色并填写完整信息")
+    # 检查主角色是否填写完整
+    if "name_0" not in st.session_state or not st.session_state["name_0"]:
+        st.error("请填写主角色名称！")
     else:
-        st.info("请确保启用的角色都已填写角色名和参数")
+        # 检查其他启用的角色是否填写完整
+        incomplete = False
+        for i in range(1, 4):
+            if st.session_state.get(f"enable_{i}", False):
+                if f"name_{i}" not in st.session_state or not st.session_state[f"name_{i}"]:
+                    incomplete = True
+                    break
+        
+        if incomplete:
+            st.error("请确保所有启用的角色都已填写名称！")
+        else:
+            st.info("点击按钮计算伤害期望")
 
 # 页脚
 st.divider()
-st.caption("原神月感电伤害计算器 v5.0 | 支持角色动态启用 | 数据仅供参考，实际游戏效果以官方为准")
+st.caption("原神月感电伤害计算器 v6.0 | 主角色固定为伊涅芙 | 数据仅供参考，实际游戏效果以官方为准")
