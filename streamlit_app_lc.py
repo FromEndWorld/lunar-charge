@@ -6,79 +6,157 @@ import itertools
 # 设置页面
 st.set_page_config(page_title="原神月感电伤害计算器", layout="wide")
 st.title("🎮 原神月感电反应伤害精确计算器")
-st.caption("主角色固定为伊涅芙 | 支持1-4名角色 | 最高伤害×1，次高×0.5，第三第四×0.083 | 作者：GPT-4")
+st.caption("表格化参数输入 | 主角色固定为伊涅芙 | 支持1-4名角色 | 最高伤害×1，次高×0.5，第三第四×0.083 | 作者：GPT-4")
 
-# 角色数据输入表单
+# 等级系数表（1-90级）
+LEVEL_FACTORS = {
+    1: 0.087, 2: 0.094, 3: 0.102, 4: 0.109, 5: 0.116, 6: 0.124, 7: 0.131, 8: 0.138, 9: 0.146, 10: 0.153,
+    11: 0.160, 12: 0.168, 13: 0.175, 14: 0.182, 15: 0.190, 16: 0.197, 17: 0.204, 18: 0.212, 19: 0.219, 20: 0.226,
+    21: 0.234, 22: 0.241, 23: 0.248, 24: 0.256, 25: 0.263, 26: 0.270, 27: 0.278, 28: 0.285, 29: 0.292, 30: 0.300,
+    31: 0.307, 32: 0.314, 33: 0.322, 34: 0.329, 35: 0.336, 36: 0.344, 37: 0.351, 38: 0.358, 39: 0.366, 40: 0.373,
+    41: 0.380, 42: 0.388, 43: 0.395, 44: 0.402, 45: 0.410, 46: 0.417, 47: 0.424, 48: 0.432, 49: 0.439, 50: 0.446,
+    51: 0.454, 52: 0.461, 53: 0.468, 54: 0.476, 55: 0.483, 56: 0.490, 57: 0.498, 58: 0.505, 59: 0.512, 60: 0.520,
+    61: 0.527, 62: 0.534, 63: 0.542, 64: 0.549, 65: 0.556, 66: 0.564, 67: 0.571, 68: 0.578, 69: 0.586, 70: 0.593,
+    71: 0.600, 72: 0.608, 73: 0.615, 74: 0.622, 75: 0.630, 76: 0.637, 77: 0.644, 78: 0.652, 79: 0.659, 80: 0.666,
+    81: 0.674, 82: 0.681, 83: 0.688, 84: 0.696, 85: 0.703, 86: 0.710, 87: 0.718, 88: 0.725, 89: 0.732, 90: 0.740
+}
+
+# 全局参数设置
+st.sidebar.header("全局参数设置")
+monster_resistance = st.sidebar.slider("怪物抗性%", min_value=-100, max_value=100, value=10, step=1)
+resistance_reduction = st.sidebar.slider("减抗值%", min_value=0, max_value=100, value=0, step=1)
+
+# 计算抗性区
+def calculate_resistance_factor(resist, reduction):
+    """计算抗性区系数"""
+    effective_resist = max(resist - reduction, -100)  # 减抗后有效抗性
+    if effective_resist < 0:
+        return 1 - effective_resist / 200  # 负抗性收益减半
+    elif effective_resist < 75:
+        return 1 - effective_resist / 100
+    else:
+        return 1 - 75 / 100  # 抗性超过75%时按75%计算
+
+resistance_factor = calculate_resistance_factor(monster_resistance, resistance_reduction)
+
+# 初始化角色表格数据
+if 'characters_df' not in st.session_state:
+    st.session_state.characters_df = pd.DataFrame({
+        "启用": [True, False, False, False],
+        "角色名": ["伊涅芙", "", "", ""],
+        "等级": [90, 90, 90, 90],
+        "元素精通": [300, 300, 300, 300],
+        "暴击率%": [60.0, 60.0, 60.0, 60.0],
+        "暴击伤害%": [150.0, 150.0, 150.0, 150.0],
+        "月感电伤害提升%": [0.0, 0.0, 0.0, 0.0]
+    })
+
+# 角色数据输入表格
 st.header("角色参数设置")
-cols = st.columns(4)
-characters = []
+st.info("在下方表格中输入角色参数（支持复制粘贴批量编辑）")
 
-# 动态角色输入 - 第一个角色固定为伊涅芙
-for i in range(4):
-    with cols[i]:
-        # 第一个角色固定为伊涅芙，始终启用
-        if i == 0:
-            # 显示固定角色
-            st.subheader(f"主角色")
-            st.markdown("**伊涅芙**")
-            
-            # 固定名称，不可修改
-            name = "伊涅芙"
-            
-            # 显示可修改的参数
-            level = st.number_input(f"等级", min_value=1, max_value=90, value=90, key=f"level_0")
-            em = st.number_input(f"元素精通", min_value=0, max_value=1500, value=300, key=f"em_0")
-            crit_rate = st.slider(f"暴击率%", min_value=0.0, max_value=100.0, value=60.0, key=f"cr_0") / 100
-            crit_dmg = st.slider(f"暴击伤害%", min_value=0.0, max_value=300.0, value=150.0, key=f"cd_0") / 100
-            
-            # 保存角色数据
-            characters.append({
-                "name": name,
-                "level": level,
-                "em": em,
-                "crit_rate": crit_rate,
-                "crit_dmg": crit_dmg
-            })
-        
-        # 其他角色可启用/禁用
-        else:
-            # 添加角色启用开关
-            enabled = st.checkbox(f"启用角色 {i+1}", value=False, key=f"enable_{i}")
-            
-            if enabled:
-                st.subheader(f"角色 {i+1}")
-                name = st.text_input(f"角色名", key=f"name_{i}", placeholder="必填", value="")
-                
-                if name:  # 只有填写了角色名才显示其他输入
-                    level = st.number_input(f"等级", min_value=1, max_value=90, value=90, key=f"level_{i}")
-                    em = st.number_input(f"元素精通", min_value=0, max_value=1500, value=300, key=f"em_{i}")
-                    crit_rate = st.slider(f"暴击率%", min_value=0.0, max_value=100.0, value=60.0, key=f"cr_{i}") / 100
-                    crit_dmg = st.slider(f"暴击伤害%", min_value=0.0, max_value=300.0, value=150.0, key=f"cd_{i}") / 100
-                    
-                    # 保存角色数据
-                    characters.append({
-                        "name": name,
-                        "level": level,
-                        "em": em,
-                        "crit_rate": crit_rate,
-                        "crit_dmg": crit_dmg
-                    })
-                else:
-                    st.warning("请输入角色名")
-            else:
-                # 禁用状态下的占位符
-                st.subheader(f"角色 {i+1} (未启用)")
-                st.caption("勾选上方开关启用此角色")
+# 使用可编辑表格
+edited_df = st.data_editor(
+    st.session_state.characters_df,
+    column_config={
+        "启用": st.column_config.CheckboxColumn(
+            "启用",
+            help="是否启用该角色",
+            default=False,
+        ),
+        "角色名": st.column_config.TextColumn(
+            "角色名",
+            help="角色名称",
+            required=True,
+        ),
+        "等级": st.column_config.NumberColumn(
+            "等级",
+            help="角色等级 (1-90)",
+            min_value=1,
+            max_value=90,
+            step=1,
+            format="%d",
+        ),
+        "元素精通": st.column_config.NumberColumn(
+            "元素精通",
+            help="元素精通值 (0-3000)",
+            min_value=0,
+            max_value=3000,
+            step=50,
+            format="%d",
+        ),
+        "暴击率%": st.column_config.NumberColumn(
+            "暴击率%",
+            help="暴击率百分比 (0-100)",
+            min_value=0.0,
+            max_value=100.0,
+            step=0.5,
+            format="%.1f",
+        ),
+        "暴击伤害%": st.column_config.NumberColumn(
+            "暴击伤害%",
+            help="暴击伤害百分比 (0-300)",
+            min_value=0.0,
+            max_value=300.0,
+            step=1.0,
+            format="%.1f",
+        ),
+        "月感电伤害提升%": st.column_config.NumberColumn(
+            "月感电伤害提升%",
+            help="月感电伤害提升百分比 (0-200)",
+            min_value=0.0,
+            max_value=200.0,
+            step=1.0,
+            format="%.1f",
+        ),
+    },
+    disabled=["角色名"],  # 角色名列不可编辑
+    hide_index=True,
+    num_rows="fixed",
+    use_container_width=True
+)
+
+# 保存编辑后的数据
+st.session_state.characters_df = edited_df.copy()
+
+# 提取有效的角色数据
+characters = []
+for i, row in edited_df.iterrows():
+    if row["启用"] and row["角色名"]:  # 只处理启用且有角色名的行
+        characters.append({
+            "name": row["角色名"],
+            "level": int(row["等级"]),
+            "em": int(row["元素精通"]),
+            "crit_rate": row["暴击率%"] / 100,
+            "crit_dmg": row["暴击伤害%"] / 100,
+            "aggrevate_bonus": row["月感电伤害提升%"] / 100
+        })
+
+# 确保主角色伊涅芙存在
+main_char_exists = any(char["name"] == "伊涅芙" for char in characters)
+if not main_char_exists:
+    st.error("必须包含主角色'伊涅芙'！请确保第一行角色名为'伊涅芙'且已启用。")
+    st.stop()
 
 # 伤害计算公式
-def calculate_base_damage(level, em):
+def calculate_base_damage(level, em, aggrevate_bonus):
     """计算基础伤害（不含暴击）"""
-    base_damage = 120 * (1 + level/90)  # 基础伤害随等级成长
-    reaction_bonus = 2.78 * em / (em + 1400)  # 元素精通加成公式
-    return base_damage * (1 + reaction_bonus)
+    # 获取等级系数
+    level_factor = LEVEL_FACTORS.get(level, 0.74)  # 默认使用90级系数
+    
+    # 计算精通加成 (符合新公式)
+    em_bonus = (em * 5) / (em + 2100)
+    
+    # 计算基础伤害 (符合新公式)
+    base_damage = level_factor * 3 * 0.6 * 1.14 * (1 + em_bonus + aggrevate_bonus)
+    return base_damage
 
 # 计算按钮
 if st.button("精确计算伤害期望", type="primary"):
+    if not characters:
+        st.error("请启用至少一个角色！")
+        st.stop()
+        
     n = len(characters)  # 实际角色数量
     st.success(f"已输入 {n} 名角色参数，开始计算...")
     
@@ -95,7 +173,7 @@ if st.button("精确计算伤害期望", type="primary"):
     # 计算每个角色的基础伤害
     char_data = []
     for char in characters:
-        base_dmg = calculate_base_damage(char["level"], char["em"])
+        base_dmg = calculate_base_damage(char["level"], char["em"], char["aggrevate_bonus"])
         crit_dmg = base_dmg * (1 + char["crit_dmg"])
         char_data.append({
             "name": char["name"],
@@ -161,6 +239,9 @@ if st.button("精确计算伤害期望", type="primary"):
         # 累加总期望
         total_expectation += expectation
     
+    # 应用抗性区
+    total_expectation *= resistance_factor
+    
     # 显示最终结果
     st.header("伤害计算结果")
     
@@ -172,6 +253,13 @@ if st.button("精确计算伤害期望", type="primary"):
         st.metric("计算组合数", len(scenario_results))
         st.metric("参与角色数", n)
         
+        # 显示抗性区信息
+        st.info("**抗性区计算**:")
+        st.write(f"- 怪物抗性: {monster_resistance}%")
+        st.write(f"- 减抗值: {resistance_reduction}%")
+        st.write(f"- 有效抗性: {max(monster_resistance - resistance_reduction, -100)}%")
+        st.write(f"- 抗性系数: {resistance_factor:.4f}")
+        
         # 显示权重说明
         st.info("**伤害权重规则**:")
         st.write(f"- 🥇 最高伤害角色 ×{weights[0]}")
@@ -181,39 +269,33 @@ if st.button("精确计算伤害期望", type="primary"):
             st.write(f"- 🥉 第三角色 ×{weights[2]}")
         if n >= 4:
             st.write(f"- 第四角色 ×{weights[3]}")
-        
+    
+    with col2:
         # 显示角色基础伤害
         st.subheader("角色基础伤害")
         base_df = pd.DataFrame([
             {
                 "角色": char["name"],
+                "等级": char["level"],
+                "等级系数": LEVEL_FACTORS[char["level"]],
+                "元素精通": char["em"],
+                "月感电加成": f"{char['aggrevate_bonus']*100:.1f}%",
                 "基础伤害": int(char["base_damage"]),
                 "暴击伤害": int(char["crit_damage"]),
                 "暴击率": f"{char['crit_rate']*100:.1f}%"
-            } for char in char_data
+            } for char in characters
         ])
         st.dataframe(base_df, hide_index=True)
-    
-    with col2:
+        
         # 显示所有组合的概率分布
-        st.subheader("暴击组合概率分布")
+        st.subheader("暴击组合概率分布 (前10)")
         prob_df = pd.DataFrame({
             "暴击组合": [r["组合"] for r in scenario_results],
             "概率": [f"{r['概率']*100:.4f}%" for r in scenario_results],
             "加权伤害": [int(r["加权伤害"]) for r in scenario_results]
         })
-        st.dataframe(prob_df.sort_values("概率", ascending=False), hide_index=True)
-        
-        # 显示最高概率组合详情
-        if scenario_results:
-            max_prob_scenario = max(scenario_results, key=lambda x: x["概率"])
-            with st.expander(f"最高概率组合: {max_prob_scenario['组合']} (概率: {max_prob_scenario['概率']*100:.2f}%)"):
-                det_df = pd.DataFrame(max_prob_scenario["详情"])
-                det_df["伤害"] = det_df["damage"].astype(int)
-                det_df["权重"] = det_df["weight"]
-                det_df["加权伤害"] = det_df["weighted"].astype(int)
-                st.dataframe(det_df[["name", "伤害", "crit", "权重", "加权伤害"]].rename(
-                    columns={"name": "角色", "crit": "暴击情况"}), hide_index=True)
+        # 只显示前10个组合
+        st.dataframe(prob_df.sort_values("概率", ascending=False).head(10), hide_index=True)
     
     # 详细计算说明
     with st.expander("计算原理说明"):
@@ -227,36 +309,38 @@ if st.button("精确计算伤害期望", type="primary"):
            - 应用权重系数：{', '.join([f'第{i+1}高×{w}' for i, w in enumerate(weights)])}
            - 计算该组合的加权总伤害
            - 期望贡献 = 加权总伤害 × 发生概率
-        3. 所有组合的期望贡献之和即为最终期望伤害
+        3. 所有组合的期望贡献之和即为总期望伤害
+        4. 应用抗性区系数：总期望伤害 × {resistance_factor:.4f}
         
         **基础伤害公式**:
         ```
-        基础伤害 = 120 × (1 + 等级/90)
-        精通加成 = 2.78 × 元素精通 ÷ (元素精通 + 1400)
-        基础伤害 = 基础伤害 × (1 + 精通加成)
+        基础伤害 = 等级系数 × 3 × 0.6 × 1.14 × (1 + (元素精通 × 5)/(元素精通 + 2100) + 月感电伤害提升)
         暴击伤害 = 基础伤害 × (1 + 暴击伤害%)
         ```
         
-        **数学表达式**:
+        **抗性区公式**:
         ```
-        总期望 = Σ[P(暴击组合) × Σ(角色伤害 × 对应权重)]
+        有效抗性 = max(怪物抗性 - 减抗值, -100)
+        如果有效抗性 < 0:
+            抗性系数 = 1 - (有效抗性 / 200)  # 负抗性收益减半
+        如果有效抗性 < 75:
+            抗性系数 = 1 - (有效抗性 / 100)
+        否则:
+            抗性系数 = 1 - (75 / 100) = 0.25
         ```
-        *注：公式参数可根据游戏实际机制调整*
+        
+        **等级系数表**:
         """)
-else:
-    # 检查其他启用的角色是否填写完整
-    incomplete = False
-    for i in range(1, 4):
-        if st.session_state.get(f"enable_{i}", False):
-            if f"name_{i}" not in st.session_state or not st.session_state[f"name_{i}"]:
-                incomplete = True
-                break
-    
-    if incomplete:
-        st.error("请确保所有启用的角色都已填写名称！")
-    else:
-        st.info("点击按钮计算伤害期望")
+        
+        # 显示等级系数表
+        levels = list(LEVEL_FACTORS.keys())
+        factors = list(LEVEL_FACTORS.values())
+        level_df = pd.DataFrame({
+            "等级": levels,
+            "系数": factors
+        })
+        st.dataframe(level_df.set_index("等级"), height=300)
 
 # 页脚
 st.divider()
-st.caption("原神月感电伤害计算器 v7.0 | 主角色固定为伊涅芙 | 数据仅供参考，实际游戏效果以官方为准")
+st.caption("原神月感电伤害计算器 v9.0 | 表格化参数输入 | 数据仅供参考，实际游戏效果以官方为准")
