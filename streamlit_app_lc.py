@@ -10,7 +10,7 @@ st.caption("表格化参数输入 | 主角色固定为伊涅芙 | 支持1-4名�
 
 # 等级系数表（1-100级）
 LEVEL_FACTORS ={
-       1: 17.17,
+    1: 17.17,
     2: 18.54,
     3: 19.90,
     4: 21.27,
@@ -111,27 +111,6 @@ LEVEL_FACTORS ={
     99: 1972.86,
     100: 2030.07
 }
-
-# 全局参数设置
-st.sidebar.header("全局参数设置")
-monster_resistance = st.sidebar.slider("怪物抗性%", min_value=-100, max_value=100, value=10, step=1)
-resistance_reduction = st.sidebar.slider("减抗值%", min_value=0, max_value=100, value=0, step=1)
-
-# 计算抗性区 - 根据新规则更新
-def calculate_resistance_factor(resist, reduction):
-    """计算抗性区系数（根据新规则）"""
-    # 计算有效抗性（百分比）
-    effective_resist = resist - reduction
-    
-    # 根据有效抗性范围应用不同公式
-    if effective_resist >= 75:  # 抗性≥75%
-        return 1 / (1 + 4 * effective_resist / 100)
-    elif effective_resist >= 0:  # 0%≤抗性＜75%
-        return 1 - effective_resist / 100
-    else:  # 抗性＜0%
-        return 1 - effective_resist / 200  # 负抗性收益减半
-
-resistance_factor = calculate_resistance_factor(monster_resistance, resistance_reduction)
 
 # 初始化角色表格数据
 if 'characters_df' not in st.session_state:
@@ -255,6 +234,49 @@ def calculate_base_damage(level, em, aggrevate_bonus):
     # 计算基础伤害 (符合新公式)
     base_damage = level_factor * 3 * 0.6 * 1.14 * (1 + em_bonus + aggrevate_bonus)
     return base_damage
+
+# 全局参数设置 - 放在角色参数下方
+st.divider()
+st.header("全局参数设置")
+
+# 创建两列布局
+col1, col2 = st.columns(2)
+
+with col1:
+    monster_resistance = st.number_input(
+        "怪物抗性%", 
+        min_value=-100, 
+        max_value=1000, 
+        value=10, 
+        step=1,
+        help="怪物基础抗性百分比（-100%到1000%）"
+    )
+
+with col2:
+    resistance_reduction = st.number_input(
+        "减抗值%", 
+        min_value=0, 
+        max_value=200, 
+        value=0, 
+        step=1,
+        help="减抗效果百分比（0%到200%）"
+    )
+
+# 计算抗性区 - 根据新规则更新
+def calculate_resistance_factor(resist, reduction):
+    """计算抗性区系数（根据新规则）"""
+    # 计算有效抗性（百分比）
+    effective_resist = resist - reduction
+    
+    # 根据有效抗性范围应用不同公式
+    if effective_resist >= 75:  # 抗性≥75%
+        return 1 / (1 + 4 * effective_resist / 100)
+    elif effective_resist >= 0:  # 0%≤抗性＜75%
+        return 1 - effective_resist / 100
+    else:  # 抗性＜0%
+        return 1 - effective_resist / 200  # 负抗性收益减半
+
+resistance_factor = calculate_resistance_factor(monster_resistance, resistance_reduction)
 
 # 计算按钮
 if st.button("精确计算伤害期望", type="primary"):
@@ -469,4 +491,4 @@ with st.expander("📋 批量操作指南"):
 
 # 页脚
 st.divider()
-st.caption("原神月感电伤害计算器 v10.0 | 修复角色名输入问题 | 支持批量操作 | 数据仅供参考，实际游戏效果以官方为准")
+st.caption("原神月感电伤害计算器 v10.1 | 优化参数输入布局 | 支持更大范围的抗性计算 | 数据仅供参考，实际游戏效果以官方为准")
