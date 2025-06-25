@@ -280,10 +280,11 @@ if st.button("精确计算伤害期望", type="primary"):
                 "等级系数": LEVEL_FACTORS[char["level"]],
                 "元素精通": char["em"],
                 "月感电加成": f"{char['aggrevate_bonus']*100:.1f}%",
-                "基础伤害": int(char["base_damage"]),
-                "暴击伤害": int(char["crit_damage"]),
+                "基础伤害": int(char_data[i]["base_damage"]),  # 从char_data获取计算后的伤害值
+                "暴击伤害": int(char_data[i]["crit_damage"]),  # 从char_data获取计算后的伤害值
                 "暴击率": f"{char['crit_rate']*100:.1f}%"
-            } for char in characters
+            }
+            for i, char in enumerate(characters)  # 使用索引确保正确对应
         ])
         st.dataframe(base_df, hide_index=True)
         
@@ -343,4 +344,4 @@ if st.button("精确计算伤害期望", type="primary"):
 
 # 页脚
 st.divider()
-st.caption("原神月感电伤害计算器 v9.0 | 表格化参数输入 | 数据仅供参考，实际游戏效果以官方为准")
+st.caption("原神月感电伤害计算器 v9.1 | 表格化参数输入 | 数据仅供参考，实际游戏效果以官方为准")
