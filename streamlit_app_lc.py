@@ -2,16 +2,12 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import itertools
+from level_factors import get_level_factor  # 导入等级系数函数
 
 # 设置页面
 st.set_page_config(page_title="原神月感电伤害计算器", layout="wide")
 st.title("🎮 原神月感电反应伤害精确计算器")
 st.caption("表格化参数输入 | 主角色固定为伊涅芙 | 支持1-4名角色 | 最高伤害×1，次高×0.5，第三第四×0.083 | 作者：GPT-4")
-
-# 等级系数表（1-100级）
-LEVEL_FACTORS ={
-    # ...（保持原有的等级系数不变）...
-}
 
 # 初始化角色表格数据
 if 'characters_df' not in st.session_state:
@@ -94,47 +90,54 @@ with st.form("character_form"):
     # 添加提交按钮来保存表格修改
     submitted = st.form_submit_button("保存角色参数")
     if submitted:
+        # 确保等级在有效范围内
+        edited_df["等级"] = edited_df["等级"].clip(1, 90)
         st.session_state.characters_df = edited_df.copy()
         st.success("角色参数已保存！")
 
 # 确保主角色伊涅芙存在且固定
-if st.session_state.characters_df.iloc[0]["角色名"] != "伊涅芙":
+if not st.session_state.characters_df.empty and st.session_state.characters_df.iloc[0]["角色名"] != "伊涅芙":
     st.warning("主角色名已重置为'伊涅芙'")
     st.session_state.characters_df.at[0, "角色名"] = "伊涅芙"
 
 # 确保主角色启用
-if not st.session_state.characters_df.iloc[0]["启用"]:
+if not st.session_state.characters_df.empty and not st.session_state.characters_df.iloc[0]["启用"]:
     st.warning("主角色必须启用，已自动启用")
     st.session_state.characters_df.at[0, "启用"] = True
 
 # 提取有效的角色数据
 characters = []
-for i, row in st.session_state.characters_df.iterrows():
-    if row["启用"] and row["角色名"]:  # 只处理启用且有角色名的行
-        characters.append({
-            "name": row["角色名"],
-            "level": int(row["等级"]),
-            "em": int(row["元素精通"]),
-            "crit_rate": row["暴击率%"] / 100,
-            "crit_dmg": row["暴击伤害%"] / 100,
-            "aggrevate_bonus": row["月感电伤害提升%"] / 100
-        })
+if not st.session_state.characters_df.empty:
+    for i, row in st.session_state.characters_df.iterrows():
+        if row["启用"] and row["角色名"]:  # 只处理启用且有角色名的行
+            # 确保等级是整数且在有效范围内
+            level = int(row["等级"])
+            level = max(1, min(90, level))  # 确保等级在1-90之间
+            
+            characters.append({
+                "name": row["角色名"],
+                "level": level,
+                "em": int(row["元素精通"]),
+                "crit_rate": row["暴击率%"] / 100,
+                "crit_dmg": row["暴击伤害%"] / 100,
+                "aggrevate_bonus": row["月感电伤害提升%"] / 100
+            })
 
 # 确保主角色伊涅芙存在
-if not any(char["name"] == "伊涅芙" for char in characters):
+if characters and not any(char["name"] == "伊涅芙" for char in characters):
     st.error("必须包含主角色'伊涅芙'！请确保第一行角色名为'伊涅芙'且已启用。")
     st.stop()
 
 # 伤害计算公式
 def calculate_base_damage(level, em, aggrevate_bonus):
     """计算基础伤害（不含暴击）"""
-    # 获取等级系数
-    level_factor = LEVEL_FACTORS.get(level, 0.74)  # 默认使用90级系数
+    # 获取等级系数 - 使用安全方法
+    level_factor = get_level_factor(level)
     
-    # 计算精通加成
+    # 计算精通加成 (符合新公式)
     em_bonus = (em * 5) / (em + 2100)
     
-    # 计算基础伤害
+    # 计算基础伤害 (符合新公式)
     base_damage = level_factor * 3 * 0.6 * 1.14 * (1 + em_bonus + aggrevate_bonus)
     return base_damage
 
@@ -310,7 +313,8 @@ if st.button("精确计算伤害期望", type="primary"):
             {
                 "角色": char["name"],
                 "等级": char["level"],
-                "等级系数": LEVEL_FACTORS[char["level"]],
+                # 使用安全方法获取等级系数
+                "等级系数": get_level_factor(char["level"]),
                 "元素精通": char["em"],
                 "月感电加成": f"{char['aggrevate_bonus']*100:.1f}%",
                 "基础伤害": int(char_data[i]["base_damage"]),
@@ -322,14 +326,17 @@ if st.button("精确计算伤害期望", type="primary"):
         st.dataframe(base_df, hide_index=True)
         
         # 显示所有组合的概率分布
-        st.subheader("暴击组合概率分布 (前10)")
-        prob_df = pd.DataFrame({
-            "暴击组合": [r["组合"] for r in scenario_results],
-            "概率": [f"{r['概率']*100:.4f}%" for r in scenario_results],
-            "加权伤害": [int(r["加权伤害"]) for r in scenario_results]
-        })
-        # 只显示前10个组合
-        st.dataframe(prob_df.sort_values("概率", ascending=False).head(10), hide_index=True)
+        if scenario_results:
+            st.subheader("暴击组合概率分布 (前10)")
+            prob_df = pd.DataFrame({
+                "暴击组合": [r["组合"] for r in scenario_results],
+                "概率": [f"{r['概率']*100:.4f}%" for r in scenario_results],
+                "加权伤害": [int(r["加权伤害"]) for r in scenario_results]
+            })
+            # 只显示前10个组合
+            st.dataframe(prob_df.sort_values("概率", ascending=False).head(10), hide_index=True)
+        else:
+            st.warning("没有可用的暴击组合数据")
     
     # 详细计算说明（更新抗性区公式）
     with st.expander("计算原理说明"):
@@ -363,18 +370,11 @@ if st.button("精确计算伤害期望", type="primary"):
         如果有效抗性 < 0%:
             抗性系数 = 1 - (有效抗性 / 2)
         ```
-        
-        **等级系数表**:
         """)
         
-        # 显示等级系数表
-        levels = list(LEVEL_FACTORS.keys())
-        factors = list(LEVEL_FACTORS.values())
-        level_df = pd.DataFrame({
-            "等级": levels,
-            "系数": factors
-        })
-        st.dataframe(level_df.set_index("等级"), height=300)
+        # 添加链接到等级系数表
+        st.markdown("**等级系数表**:")
+        st.markdown("等级系数表已移至单独文件 [level_factors.py](level_factors.py)")
 
 # 批量操作指南
 with st.expander("📋 批量操作指南"):
@@ -389,9 +389,10 @@ with st.expander("📋 批量操作指南"):
     - 第一行角色名固定为"伊涅芙"，粘贴时会自动重置
     - 第一行启用状态固定为True，粘贴时会自动重置
     - 其他行角色名可自由编辑
-    - 粘贴后请检查数据格式是否正确
+    - 粘贴后请点击"保存角色参数"按钮
+    - 等级必须在1-90范围内
     """)
 
 # 页脚
 st.divider()
-st.caption("原神月感电伤害计算器 v10.1 | 优化参数输入布局 | 支持更大范围的抗性计算 | 数据仅供参考，实际游戏效果以官方为准")
+st.caption("原神月感电伤害计算器 v10.3 | 等级系数表移至单独文件 | 优化代码结构 | 数据仅供参考，实际游戏效果以官方为准")
