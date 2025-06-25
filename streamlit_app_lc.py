@@ -6,7 +6,7 @@ from level_factors import get_level_factor  # 导入等级系数函数
 
 # 设置页面
 st.set_page_config(page_title="原神月感电伤害计算器", layout="wide")
-st.title("🎮 原神月感电反应伤害精确计算器")
+st.title("🎮 原神剧变月感电反应伤害期望计算器")
 st.caption("表格化参数输入 | 主角色固定为伊涅芙 | 支持1-4名角色 | 最高伤害×1，次高×0.5，第三第四×0.083 | 作者：GPT-4")
 
 # 初始化角色表格数据
@@ -143,7 +143,7 @@ def calculate_base_damage(level, em, aggrevate_bonus):
 
 # 全局参数设置
 st.divider()
-st.header("全局参数设置")
+st.header("抗性设置")
 
 # 创建两列布局
 col1, col2 = st.columns(2)
@@ -185,7 +185,7 @@ def calculate_resistance_factor(resist, reduction):
 resistance_factor = calculate_resistance_factor(monster_resistance, resistance_reduction)
 
 # 计算按钮
-if st.button("精确计算伤害期望", type="primary"):
+if st.button("计算伤害期望", type="primary"):
     if not characters:
         st.error("请启用至少一个角色！")
         st.stop()
