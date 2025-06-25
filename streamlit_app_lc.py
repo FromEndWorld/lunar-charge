@@ -55,7 +55,7 @@ if 'characters_df' not in st.session_state:
 st.header("角色参数设置")
 st.info("在下方表格中输入角色参数（支持复制粘贴批量编辑）")
 
-# 使用可编辑表格
+# 使用可编辑表格 - 修复角色名输入问题
 edited_df = st.data_editor(
     st.session_state.characters_df,
     column_config={
@@ -110,7 +110,7 @@ edited_df = st.data_editor(
             format="%.1f",
         ),
     },
-    disabled=["角色名"],  # 角色名列不可编辑
+    # 移除角色名列的禁用 - 允许输入其他角色名
     hide_index=True,
     num_rows="fixed",
     use_container_width=True
@@ -118,6 +118,18 @@ edited_df = st.data_editor(
 
 # 保存编辑后的数据
 st.session_state.characters_df = edited_df.copy()
+
+# 确保主角色伊涅芙存在且固定
+if edited_df.iloc[0]["角色名"] != "伊涅芙":
+    st.warning("主角色名已重置为'伊涅芙'")
+    edited_df.at[0, "角色名"] = "伊涅芙"
+    st.session_state.characters_df = edited_df.copy()
+
+# 确保主角色启用
+if not edited_df.iloc[0]["启用"]:
+    st.warning("主角色必须启用，已自动启用")
+    edited_df.at[0, "启用"] = True
+    st.session_state.characters_df = edited_df.copy()
 
 # 提取有效的角色数据
 characters = []
@@ -133,8 +145,7 @@ for i, row in edited_df.iterrows():
         })
 
 # 确保主角色伊涅芙存在
-main_char_exists = any(char["name"] == "伊涅芙" for char in characters)
-if not main_char_exists:
+if not any(char["name"] == "伊涅芙" for char in characters):
     st.error("必须包含主角色'伊涅芙'！请确保第一行角色名为'伊涅芙'且已启用。")
     st.stop()
 
@@ -280,11 +291,11 @@ if st.button("精确计算伤害期望", type="primary"):
                 "等级系数": LEVEL_FACTORS[char["level"]],
                 "元素精通": char["em"],
                 "月感电加成": f"{char['aggrevate_bonus']*100:.1f}%",
-                "基础伤害": int(char_data[i]["base_damage"]),  # 从char_data获取计算后的伤害值
-                "暴击伤害": int(char_data[i]["crit_damage"]),  # 从char_data获取计算后的伤害值
+                "基础伤害": int(char_data[i]["base_damage"]),
+                "暴击伤害": int(char_data[i]["crit_damage"]),
                 "暴击率": f"{char['crit_rate']*100:.1f}%"
             }
-            for i, char in enumerate(characters)  # 使用索引确保正确对应
+            for i, char in enumerate(characters)
         ])
         st.dataframe(base_df, hide_index=True)
         
@@ -342,6 +353,22 @@ if st.button("精确计算伤害期望", type="primary"):
         })
         st.dataframe(level_df.set_index("等级"), height=300)
 
+# 批量操作指南
+with st.expander("📋 批量操作指南"):
+    st.markdown("""
+    **如何批量输入数据:**
+    1. **复制数据**：从Excel或其他表格软件复制数据
+    2. **全选表格**：点击表格左上角的空白区域全选表格
+    3. **粘贴数据**：按 `Ctrl+V` (Windows) 或 `Cmd+V` (Mac) 粘贴
+    4. **格式要求**：确保列顺序为：启用,角色名,等级,元素精通,暴击率%,暴击伤害%,月感电伤害提升%
+    
+    **注意事项:**
+    - 第一行角色名固定为"伊涅芙"，粘贴时会自动重置
+    - 第一行启用状态固定为True，粘贴时会自动重置
+    - 其他行角色名可自由编辑
+    - 粘贴后请检查数据格式是否正确
+    """)
+
 # 页脚
 st.divider()
-st.caption("原神月感电伤害计算器 v9.1 | 表格化参数输入 | 数据仅供参考，实际游戏效果以官方为准")
+st.caption("原神月感电伤害计算器 v10.0 | 修复角色名输入问题 | 支持批量操作 | 数据仅供参考，实际游戏效果以官方为准")
