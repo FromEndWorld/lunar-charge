@@ -7,7 +7,7 @@ from level_factors import get_level_factor  # 导入等级系数函数
 # 设置页面
 st.set_page_config(page_title="原神月感电伤害计算器", layout="wide")
 st.title("🎮 原神剧变月感电反应伤害期望计算器")
-st.caption("表格化参数输入 | 主角色固定为伊涅芙 | 支持1-4名角色 | 最高伤害×1，次高×0.5，第三第四×0.083 | 作者：GPT-4")
+st.caption("表格化参数输入 | 主角色固定为伊涅芙 | 支持1-4名角色 | 最高伤害×1，次高×0.5，第三第四×0.083 | 作者：Kererū & Deepseek")
 
 # 初始化角色表格数据
 if 'characters_df' not in st.session_state:
