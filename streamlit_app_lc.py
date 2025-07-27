@@ -152,7 +152,7 @@ def calculate_base_damage(level, em, aggrevate_bonus):
     level_factor = get_level_factor(level)
     
     # 计算精通加成 (符合新公式)
-    em_bonus = (em * 5) / (em + 2100)
+    em_bonus = (em * 6) / (em + 2000)
     
     # 计算基础伤害 (符合新公式)
     base_damage = level_factor * 3 * 0.6 * 1.14 * (1 + em_bonus + aggrevate_bonus)
@@ -371,7 +371,7 @@ if st.button("计算伤害期望", type="primary"):
         
         **基础伤害公式**:
         ```
-        基础伤害 = 等级系数 × 3 × 0.6 × 1.14 × (1 + (元素精通 × 5)/(元素精通 + 2100) + 月感电伤害提升)
+        基础伤害 = 等级系数 × 3 × 0.6 × 1.14 × (1 + (元素精通 × 6)/(元素精通 + 2000) + 月感电伤害提升)
         暴击伤害 = 基础伤害 × (1 + 暴击伤害%)
         ```
         
